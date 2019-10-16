@@ -72,12 +72,16 @@ public abstract class AbstractDirectory<T> implements Directory<T> {
         if (destroyed) {
             throw new RpcException("Directory already destroyed .url: " + getUrl());
         }
+        // 调用 doList 方法列举 Invoker，doList 是模板方法，由子类实现
         List<Invoker<T>> invokers = doList(invocation);
+        // 获取路由 Router 列表
         List<Router> localRouters = this.routers; // local reference
         if (localRouters != null && !localRouters.isEmpty()) {
             for (Router router : localRouters) {
                 try {
+                    // 获取 runtime 参数，并根据参数决定是否进行路由
                     if (router.getUrl() == null || router.getUrl().getParameter(Constants.RUNTIME_KEY, false)) {
+                        // 进行服务路由
                         invokers = router.route(invokers, getConsumerUrl(), invocation);
                     }
                 } catch (Throwable t) {
@@ -99,16 +103,20 @@ public abstract class AbstractDirectory<T> implements Directory<T> {
 
     protected void setRouters(List<Router> routers) {
         // copy list
+        //拷贝routers
         routers = routers == null ? new ArrayList<Router>() : new ArrayList<Router>(routers);
         // append url router
+        //添加url路由信息
         String routerkey = url.getParameter(Constants.ROUTER_KEY);
         if (routerkey != null && routerkey.length() > 0) {
             RouterFactory routerFactory = ExtensionLoader.getExtensionLoader(RouterFactory.class).getExtension(routerkey);
             routers.add(routerFactory.getRouter(url));
         }
         // append mock invoker selector
+        //添加MockInvokersSelector和TagRouter
         routers.add(new MockInvokersSelector());
         routers.add(new TagRouter());
+        //对routers进行排序
         Collections.sort(routers);
         this.routers = routers;
     }
@@ -130,6 +138,7 @@ public abstract class AbstractDirectory<T> implements Directory<T> {
         destroyed = true;
     }
 
+    // 模板方法，由子类实现
     protected abstract List<Invoker<T>> doList(Invocation invocation) throws RpcException;
 
 }
