@@ -104,20 +104,32 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
     // the scope for referring/exporting a service, if it's local, it means searching in current JVM only.
     private String scope;
 
+    /**
+     * 检查注册中心是否存在
+     */
     protected void checkRegistry() {
         // for backward compatibility
+        //如果注册中心为空，则尝试从配置文件中读取注册中心信息
         if (registries == null || registries.isEmpty()) {
+            //获取注册中心地址
             String address = ConfigUtils.getProperty("dubbo.registry.address");
+            //注册中心地址不为空
             if (address != null && address.length() > 0) {
+                //新建注册中心列表
                 registries = new ArrayList<RegistryConfig>();
+                //对address进行拆分，得到注册中心地址数组
                 String[] as = address.split("\\s*[|]+\\s*");
+                //遍历注册中心地址数组
                 for (String a : as) {
+                    //新建RegistryConfig实例
                     RegistryConfig registryConfig = new RegistryConfig();
                     registryConfig.setAddress(a);
+                    //添加到注册中心列表
                     registries.add(registryConfig);
                 }
             }
         }
+        //如果注册中心列表为空，则抛出异常
         if ((registries == null || registries.isEmpty())) {
             throw new IllegalStateException((getClass().getSimpleName().startsWith("Reference")
                     ? "No such any registry to refer service in consumer "
@@ -127,6 +139,7 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
                     + Version.getVersion()
                     + ", Please add <dubbo:registry address=\"...\" /> to your spring config. If you want unregister, please set <dubbo:service registry=\"N/A\" />");
         }
+        //填充registryConfig属性
         for (RegistryConfig registryConfig : registries) {
             appendProperties(registryConfig);
         }
@@ -158,29 +171,53 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
         }
     }
 
+    /**
+     * 1.检测是否存在注册中心配置类，不存在则抛出异常
+     * 2.构建参数映射集合，也就是 map
+     * 3.构建注册中心链接列表
+     * 4.遍历链接列表，并根据条件决定是否将其添加到 registryList 中
+     *
+     * @param provider
+     * @return
+     */
     protected List<URL> loadRegistries(boolean provider) {
+        // 检测是否存在注册中心配置类，不存在则抛出异常
         checkRegistry();
+
         List<URL> registryList = new ArrayList<URL>();
+        //如果注册中心列表不为空
         if (registries != null && !registries.isEmpty()) {
+            //遍历注册中心列表
             for (RegistryConfig config : registries) {
                 String address = config.getAddress();
+                //address为空
                 if (address == null || address.length() == 0) {
+                    //设置地址为0.0.0.0
                     address = Constants.ANYHOST_VALUE;
                 }
+                //从配置文件中获取address
                 String sysaddress = System.getProperty("dubbo.registry.address");
+                //sysaddress不为空
                 if (sysaddress != null && sysaddress.length() > 0) {
+                    //设置address为sysaddress
                     address = sysaddress;
                 }
                 if (address.length() > 0 && !RegistryConfig.NO_AVAILABLE.equalsIgnoreCase(address)) {
                     Map<String, String> map = new HashMap<String, String>();
+                    //将application配置信息放入map
                     appendParameters(map, application);
+                    //将registryConfig配置信息放入map
                     appendParameters(map, config);
+                    // 添加 path、pid，protocol 等信息到 map 中
                     map.put("path", RegistryService.class.getName());
                     map.put("dubbo", Version.getProtocolVersion());
                     map.put(Constants.TIMESTAMP_KEY, String.valueOf(System.currentTimeMillis()));
+                    //获取pid
                     if (ConfigUtils.getPid() > 0) {
+                        //将pid信息放入map
                         map.put(Constants.PID_KEY, String.valueOf(ConfigUtils.getPid()));
                     }
+                    //map的key中不存在protocol
                     if (!map.containsKey("protocol")) {
                         if (ExtensionLoader.getExtensionLoader(RegistryFactory.class).hasExtension("remote")) {
                             map.put("protocol", "remote");
@@ -188,10 +225,16 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
                             map.put("protocol", "dubbo");
                         }
                     }
+                    // 解析得到 URL 列表，address 可能包含多个注册中心 ip，
+                    // 因此解析得到的是一个 URL 列表
                     List<URL> urls = UrlUtils.parseURLs(address, map);
                     for (URL url : urls) {
                         url = url.addParameter(Constants.REGISTRY_KEY, url.getProtocol());
+                        // 将 URL 协议头设置为 registry
                         url = url.setProtocol(Constants.REGISTRY_PROTOCOL);
+                        // 通过判断条件，决定是否添加 url 到 registryList 中，条件如下：
+                        // (服务提供者 && register = true 或 null)
+                        //    || (非服务提供者 && subscribe = true 或 null)
                         if ((provider && url.getParameter(Constants.REGISTER_KEY, true))
                                 || (!provider && url.getParameter(Constants.SUBSCRIBE_KEY, true))) {
                             registryList.add(url);
