@@ -24,6 +24,8 @@ import java.lang.annotation.Target;
 
 /**
  * Method grouping validation.
+ *
+ * 方法分组验证注解
  * <p>
  * Scenario: this annotation can be used on interface's method when need to check against group before invoke the method
  * For example: <pre> @MethodValidated({Save.class, Update.class})
@@ -36,5 +38,9 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
 public @interface MethodValidated {
+
+    /**
+     * @return 分组集合
+     */
     Class<?>[] value() default {};
 }
