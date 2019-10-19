@@ -30,6 +30,8 @@ import java.util.concurrent.Semaphore;
 
 /**
  * ThreadLimitInvokerFilter
+ *
+ * 服务提供者每服务、每方法的最大可并行执行请求数的过滤器实现类
  */
 @Activate(group = Constants.PROVIDER, value = Constants.EXECUTES_KEY)
 public class ExecuteLimitFilter implements Filter {
@@ -38,16 +40,21 @@ public class ExecuteLimitFilter implements Filter {
     public Result invoke(Invoker<?> invoker, Invocation invocation) throws RpcException {
         URL url = invoker.getUrl();
         String methodName = invocation.getMethodName();
+        // 信号量
         Semaphore executesLimit = null;
+        // 是否获得信号量
         boolean acquireResult = false;
+        // 获得服务提供者每服务每方法最大可并行执行请求数
         int max = url.getMethodParameter(methodName, Constants.EXECUTES_KEY, 0);
         if (max > 0) {
+            // 获得 RpcStatus 对象，基于服务 URL + 方法维度
             RpcStatus count = RpcStatus.getStatus(url, invocation.getMethodName());
 //            if (count.getActive() >= max) {
             /**
              * http://manzhizhen.iteye.com/blog/2386408
              * use semaphore for concurrency control (to limit thread number)
              */
+            // 获得信号量。若获得不到，抛出异常。
             executesLimit = count.getSemaphore(max);
             if(executesLimit != null && !(acquireResult = executesLimit.tryAcquire())) {
                 throw new RpcException("Failed to invoke method " + invocation.getMethodName() + " in provider " + url + ", cause: The service using threads greater than <dubbo:service executes=\"" + max + "\" /> limited.");
@@ -55,11 +62,14 @@ public class ExecuteLimitFilter implements Filter {
         }
         long begin = System.currentTimeMillis();
         boolean isSuccess = true;
+        // 调用开始的计数
         RpcStatus.beginCount(url, methodName);
         try {
+            // 服务调用
             Result result = invoker.invoke(invocation);
             return result;
         } catch (Throwable t) {
+            // 标记失败
             isSuccess = false;
             if (t instanceof RuntimeException) {
                 throw (RuntimeException) t;
@@ -67,7 +77,9 @@ public class ExecuteLimitFilter implements Filter {
                 throw new RpcException("unexpected exception when ExecuteLimitFilter", t);
             }
         } finally {
+            // 调用结束的计数（成功）（失败）
             RpcStatus.endCount(url, methodName, System.currentTimeMillis() - begin, isSuccess);
+            // 释放信号量
             if(acquireResult) {
                 executesLimit.release();
             }
