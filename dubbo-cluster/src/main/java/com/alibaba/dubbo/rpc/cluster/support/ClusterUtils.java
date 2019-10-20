@@ -31,6 +31,15 @@ public class ClusterUtils {
     private ClusterUtils() {
     }
 
+    /**
+     * 合并url
+     *
+     * 移除服务端提供者的一些配置，与消费者的配置进行合并
+     *
+     * @param remoteUrl
+     * @param localMap
+     * @return
+     */
     public static URL mergeUrl(URL remoteUrl, Map<String, String> localMap) {
         Map<String, String> map = new HashMap<String, String>();
         Map<String, String> remoteMap = remoteUrl.getParameters();
@@ -40,6 +49,7 @@ public class ClusterUtils {
             map.putAll(remoteMap);
 
             // Remove configurations from provider, some items should be affected by provider.
+            //移除服务端的一些配置
             map.remove(Constants.THREAD_NAME_KEY);
             map.remove(Constants.DEFAULT_KEY_PREFIX + Constants.THREAD_NAME_KEY);
 
@@ -62,9 +72,11 @@ public class ClusterUtils {
             map.remove(Constants.DEFAULT_KEY_PREFIX + Constants.TRANSPORTER_KEY);
         }
 
+        //本地的localMap不为空，则添加到map中
         if (localMap != null && localMap.size() > 0) {
             map.putAll(localMap);
         }
+        //从服务端URL的map中选择性添加属性到map中
         if (remoteMap != null && remoteMap.size() > 0) {
             // Use version passed from provider side
             String dubbo = remoteMap.get(Constants.DUBBO_VERSION_KEY);
@@ -89,12 +101,14 @@ public class ClusterUtils {
                 map.put(Constants.REMOTE_TIMESTAMP_KEY, remoteMap.get(Constants.TIMESTAMP_KEY));
             }
             // Combine filters and listeners on Provider and Consumer
+            //合并服务者和消费者的filter
             String remoteFilter = remoteMap.get(Constants.REFERENCE_FILTER_KEY);
             String localFilter = localMap.get(Constants.REFERENCE_FILTER_KEY);
             if (remoteFilter != null && remoteFilter.length() > 0
                     && localFilter != null && localFilter.length() > 0) {
                 localMap.put(Constants.REFERENCE_FILTER_KEY, remoteFilter + "," + localFilter);
             }
+            //合并服务者和消费者的listeners
             String remoteListener = remoteMap.get(Constants.INVOKER_LISTENER_KEY);
             String localListener = localMap.get(Constants.INVOKER_LISTENER_KEY);
             if (remoteListener != null && remoteListener.length() > 0
@@ -102,7 +116,7 @@ public class ClusterUtils {
                 localMap.put(Constants.INVOKER_LISTENER_KEY, remoteListener + "," + localListener);
             }
         }
-
+        //清除remoteUrl的属性，将map添加到remoteUrl中并返回
         return remoteUrl.clearParameters().addParameters(map);
     }
 
