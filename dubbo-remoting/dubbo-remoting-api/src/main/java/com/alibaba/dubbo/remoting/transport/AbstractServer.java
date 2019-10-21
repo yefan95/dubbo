@@ -36,20 +36,40 @@ import java.util.concurrent.ThreadPoolExecutor;
 
 /**
  * AbstractServer
+ *
+ * 实现 Server 接口，继承 AbstractEndpoint 抽象类，服务器抽象类
+ *
+ * 重点实现了公用的逻辑，同时抽象了开启、关闭等模板方法，供子类实现
  */
 public abstract class AbstractServer extends AbstractEndpoint implements Server {
 
     protected static final String SERVER_THREAD_POOL_NAME = "DubboServerHandler";
     private static final Logger logger = LoggerFactory.getLogger(AbstractServer.class);
+    /**
+     * 线程池
+     */
     ExecutorService executor;
+    /**
+     * 服务地址
+     */
     private InetSocketAddress localAddress;
+    /**
+     * 绑定地址
+     */
     private InetSocketAddress bindAddress;
+    /**
+     * 服务器最大可接受连接数
+     */
     private int accepts;
+    /**
+     * 空闲超时时间，单位：毫秒
+     */
     private int idleTimeout = 600; //600 seconds
 
     public AbstractServer(URL url, ChannelHandler handler) throws RemotingException {
         // 调用父类构造方法，这里就不用跟进去了，没什么复杂逻辑
         super(url, handler);
+        // 服务地址
         localAddress = getUrl().toInetSocketAddress();
 
         // 获取 ip 和端口
@@ -62,6 +82,7 @@ public abstract class AbstractServer extends AbstractEndpoint implements Server 
         bindAddress = new InetSocketAddress(bindIp, bindPort);
         // 获取最大可接受连接数
         this.accepts = url.getParameter(Constants.ACCEPTS_KEY, Constants.DEFAULT_ACCEPTS);
+        // 空闲超时时间
         this.idleTimeout = url.getParameter(Constants.IDLE_TIMEOUT_KEY, Constants.DEFAULT_IDLE_TIMEOUT);
         try {
             // 调用模板方法 doOpen 启动服务器
@@ -74,6 +95,7 @@ public abstract class AbstractServer extends AbstractEndpoint implements Server 
                     + " on " + getLocalAddress() + ", cause: " + t.getMessage(), t);
         }
         //fixme replace this with better method
+        // 获得线程池
         DataStore dataStore = ExtensionLoader.getExtensionLoader(DataStore.class).getDefaultExtension();
         executor = (ExecutorService) dataStore.get(Constants.EXECUTOR_SERVICE_COMPONENT_KEY, Integer.toString(url.getPort()));
     }
@@ -136,7 +158,9 @@ public abstract class AbstractServer extends AbstractEndpoint implements Server 
 
     @Override
     public void send(Object message, boolean sent) throws RemotingException {
+        // 获得所有的客户端的通道
         Collection<Channel> channels = getChannels();
+        // 群发消息
         for (Channel channel : channels) {
             if (channel.isConnected()) {
                 channel.send(message, sent);
@@ -185,6 +209,12 @@ public abstract class AbstractServer extends AbstractEndpoint implements Server 
         return idleTimeout;
     }
 
+    /**
+     * 被客户端连接
+     *
+     * @param ch
+     * @throws RemotingException
+     */
     @Override
     public void connected(Channel ch) throws RemotingException {
         // If the server has entered the shutdown process, reject any new connection
@@ -194,12 +224,15 @@ public abstract class AbstractServer extends AbstractEndpoint implements Server 
             return;
         }
 
+        // 超过上限，关闭新的链接
         Collection<Channel> channels = getChannels();
         if (accepts > 0 && channels.size() > accepts) {
             logger.error("Close channel " + ch + ", cause: The server " + ch.getLocalAddress() + " connections greater than max config " + accepts);
+            // 关闭新的链接
             ch.close();
             return;
         }
+        // 连接
         super.connected(ch);
     }
 
