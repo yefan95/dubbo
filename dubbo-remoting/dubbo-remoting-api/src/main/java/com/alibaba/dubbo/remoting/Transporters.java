@@ -24,6 +24,8 @@ import com.alibaba.dubbo.remoting.transport.ChannelHandlerDispatcher;
 
 /**
  * Transporter facade. (API, Static, ThreadSafe)
+ *
+ * Transporter 门面类
  */
 public class Transporters {
 
@@ -47,6 +49,7 @@ public class Transporters {
         if (handlers == null || handlers.length == 0) {
             throw new IllegalArgumentException("handlers == null");
         }
+        // 创建 handler
         ChannelHandler handler;
         if (handlers.length == 1) {
             handler = handlers[0];

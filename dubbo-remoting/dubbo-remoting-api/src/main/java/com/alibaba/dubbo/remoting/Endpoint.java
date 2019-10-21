@@ -23,6 +23,9 @@ import java.net.InetSocketAddress;
 /**
  * Endpoint. (API/SPI, Prototype, ThreadSafe)
  *
+ * 一个 Client 或 Server ，都是一个 Endpoint
+ * //TODO Endpoint概念理解
+ *
  *
  * @see com.alibaba.dubbo.remoting.Channel
  * @see com.alibaba.dubbo.remoting.Client

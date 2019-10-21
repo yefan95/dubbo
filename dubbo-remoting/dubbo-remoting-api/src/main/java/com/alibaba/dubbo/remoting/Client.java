@@ -20,6 +20,9 @@ import com.alibaba.dubbo.common.Resetable;
 
 /**
  * Remoting Client. (API/SPI, Prototype, ThreadSafe)
+ *
+ * 实现 Endpoint 和 Channel 和 Resetable 接口，客户端接口
+ *
  * <p>
  * <a href="http://en.wikipedia.org/wiki/Client%E2%80%93server_model">Client/Server</a>
  *
@@ -29,6 +32,7 @@ public interface Client extends Endpoint, Channel, Resetable {
 
     /**
      * reconnect.
+     * 重连
      */
     void reconnect() throws RemotingException;
 
