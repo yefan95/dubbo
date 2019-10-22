@@ -42,33 +42,55 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * ExchangeServerImpl
+ *
+ * 实现 ExchangeServer 接口，基于消息头部( Header )的信息交换服务器实现类
  */
 public class HeaderExchangeServer implements ExchangeServer {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass());
 
+    /**
+     * 定时器线程池
+     */
     private final ScheduledExecutorService scheduled = Executors.newScheduledThreadPool(1,
             new NamedThreadFactory(
                     "dubbo-remoting-server-heartbeat",
                     true));
+    /**
+     * 服务器
+     */
     private final Server server;
     // heartbeat timer
+    /**
+     * 心跳定时器
+     */
     private ScheduledFuture<?> heartbeatTimer;
     // heartbeat timeout (ms), default value is 0 , won't execute a heartbeat.
+    /**
+     * 是否心跳
+     */
     private int heartbeat;
+    /**
+     * 心跳间隔，单位：毫秒
+     */
     private int heartbeatTimeout;
+    /**
+     * 是否关闭
+     */
     private AtomicBoolean closed = new AtomicBoolean(false);
 
     public HeaderExchangeServer(Server server) {
         if (server == null) {
             throw new IllegalArgumentException("server == null");
         }
+        // 读取心跳相关配置
         this.server = server;
         this.heartbeat = server.getUrl().getParameter(Constants.HEARTBEAT_KEY, 0);
         this.heartbeatTimeout = server.getUrl().getParameter(Constants.HEARTBEAT_TIMEOUT_KEY, heartbeat * 3);
         if (heartbeatTimeout < heartbeat * 2) {
             throw new IllegalStateException("heartbeatTimeout < heartbeatInterval * 2");
         }
+        // 发起心跳定时器
         startHeartbeatTimer();
     }
 
@@ -105,13 +127,16 @@ public class HeaderExchangeServer implements ExchangeServer {
 
     @Override
     public void close(final int timeout) {
+        // 关闭
         startClose();
         if (timeout > 0) {
             final long max = (long) timeout;
             final long start = System.currentTimeMillis();
+            // 发送 READONLY 事件给所有 Client ，表示 Server 不可读了。
             if (getUrl().getParameter(Constants.CHANNEL_SEND_READONLYEVENT_KEY, true)) {
                 sendChannelReadOnlyEvent();
             }
+            // 等待请求完成
             while (HeaderExchangeServer.this.isRunning()
                     && System.currentTimeMillis() - start < max) {
                 try {
@@ -121,7 +146,9 @@ public class HeaderExchangeServer implements ExchangeServer {
                 }
             }
         }
+        // 关闭心跳定时器
         doClose();
+        // 关闭服务器
         server.close(timeout);
     }
 
@@ -131,11 +158,14 @@ public class HeaderExchangeServer implements ExchangeServer {
     }
 
     private void sendChannelReadOnlyEvent() {
+        // 创建 READONLY_EVENT 请求
         Request request = new Request();
         request.setEvent(Request.READONLY_EVENT);
+        // 无需响应
         request.setTwoWay(false);
         request.setVersion(Version.getProtocolVersion());
 
+        // 发送给所有 Client
         Collection<Channel> channels = getChannels();
         for (Channel channel : channels) {
             try {
@@ -210,6 +240,7 @@ public class HeaderExchangeServer implements ExchangeServer {
 
     @Override
     public void reset(URL url) {
+        // 重置服务器
         server.reset(url);
         try {
             if (url.hasParameter(Constants.HEARTBEAT_KEY)
@@ -219,6 +250,7 @@ public class HeaderExchangeServer implements ExchangeServer {
                 if (t < h * 2) {
                     throw new IllegalStateException("heartbeatTimeout < heartbeatInterval * 2");
                 }
+                // 重置定时任务
                 if (h != heartbeat || t != heartbeatTimeout) {
                     heartbeat = h;
                     heartbeatTimeout = t;
@@ -253,7 +285,9 @@ public class HeaderExchangeServer implements ExchangeServer {
     }
 
     private void startHeartbeatTimer() {
+        // 停止原有定时任务
         stopHeartbeatTimer();
+        // 发起新的定时任务
         if (heartbeat > 0) {
             heartbeatTimer = scheduled.scheduleWithFixedDelay(
                     new HeartBeatTask(new HeartBeatTask.ChannelProvider() {
