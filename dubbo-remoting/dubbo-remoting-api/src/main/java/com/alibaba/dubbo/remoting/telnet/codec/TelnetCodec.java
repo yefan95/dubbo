@@ -35,17 +35,27 @@ import java.util.List;
 
 /**
  * TelnetCodec
+ *
+ * 实现 TransportCodec 类，Telnet 命令编解码器
  */
 public class TelnetCodec extends TransportCodec {
 
     private static final Logger logger = LoggerFactory.getLogger(TelnetCodec.class);
-
+    /**
+     * 历史命令列表
+     */
     private static final String HISTORY_LIST_KEY = "telnet.history.list";
-
+    /**
+     * 历史命令位置（用户向上或向下）
+     */
     private static final String HISTORY_INDEX_KEY = "telnet.history.index";
-
+    /**
+     * 向上
+     */
     private static final byte[] UP = new byte[]{27, 91, 65};
-
+    /**
+     * 向下
+     */
     private static final byte[] DOWN = new byte[]{27, 91, 66};
 
     private static final List<?> ENTER = Arrays.asList(new Object[]{new byte[]{'\r', '\n'} /* Windows Enter */, new byte[]{'\n'} /* Linux Enter */});
@@ -89,6 +99,7 @@ public class TelnetCodec extends TransportCodec {
         int index = 0;
         for (int i = 0; i < message.length; i++) {
             byte b = message[i];
+            // 退格，尾部减小
             if (b == '\b') { // backspace
                 if (index > 0) {
                     index--;
@@ -98,7 +109,9 @@ public class TelnetCodec extends TransportCodec {
                         index--;
                     }
                 }
-            } else if (b == 27) { // escape
+            }
+            // 换码(溢出)
+            else if (b == 27) { // escape
                 if (i < message.length - 4 && message[i + 4] == 126) {
                     i = i + 4;
                 } else if (i < message.length - 3 && message[i + 3] == 126) {
@@ -106,7 +119,9 @@ public class TelnetCodec extends TransportCodec {
                 } else if (i < message.length - 2) {
                     i = i + 2;
                 }
-            } else if (b == -1 && i < message.length - 2
+            }
+            // 握手
+            else if (b == -1 && i < message.length - 2
                     && (message[i + 1] == -3 || message[i + 1] == -5)) { // handshake
                 i = i + 2;
             } else {
@@ -116,6 +131,7 @@ public class TelnetCodec extends TransportCodec {
         if (index == 0) {
             return "";
         }
+        // 创建字符串
         return new String(copy, 0, index, charset.name()).trim();
     }
 
@@ -138,13 +154,17 @@ public class TelnetCodec extends TransportCodec {
 
     @Override
     public void encode(Channel channel, ChannelBuffer buffer, Object message) throws IOException {
+        // telnet 命令结果
         if (message instanceof String) {
             if (isClientSide(channel)) {
                 message = message + "\r\n";
             }
+            // 写入
             byte[] msgData = ((String) message).getBytes(getCharset(channel).name());
             buffer.writeBytes(msgData);
-        } else {
+        }
+        // 非 telnet 命令结果。目前不会出现
+        else {
             super.encode(channel, buffer, message);
         }
     }
@@ -159,16 +179,19 @@ public class TelnetCodec extends TransportCodec {
 
     @SuppressWarnings("unchecked")
     protected Object decode(Channel channel, ChannelBuffer buffer, int readable, byte[] message) throws IOException {
+        // 【TODO 8025】为啥 client 侧，直接返回
         if (isClientSide(channel)) {
             return toString(message, getCharset(channel));
         }
+        // 检查长度
         checkPayload(channel, readable);
         if (message == null || message.length == 0) {
             return DecodeResult.NEED_MORE_INPUT;
         }
-
+        // 处理退格的情况。
         if (message[message.length - 1] == '\b') { // Windows backspace echo
             try {
+                // 32=空格 8=退格
                 boolean doublechar = message.length >= 3 && message[message.length - 3] < 0; // double byte char
                 channel.send(new String(doublechar ? new byte[]{32, 32, 8, 8} : new byte[]{32, 8}, getCharset(channel).name()));
             } catch (RemotingException e) {
@@ -176,17 +199,19 @@ public class TelnetCodec extends TransportCodec {
             }
             return DecodeResult.NEED_MORE_INPUT;
         }
-
+        // 关闭指令
         for (Object command : EXIT) {
             if (isEquals(message, (byte[]) command)) {
                 if (logger.isInfoEnabled()) {
                     logger.info(new Exception("Close channel " + channel + " on exit command: " + Arrays.toString((byte[]) command)));
                 }
+                // 关闭通道
                 channel.close();
                 return null;
             }
         }
 
+        // 使用历史的命令
         boolean up = endsWith(message, UP);
         boolean down = endsWith(message, DOWN);
         if (up || down) {
@@ -194,48 +219,61 @@ public class TelnetCodec extends TransportCodec {
             if (history == null || history.isEmpty()) {
                 return DecodeResult.NEED_MORE_INPUT;
             }
+            // 获得历史命令数组的位置
             Integer index = (Integer) channel.getAttribute(HISTORY_INDEX_KEY);
             Integer old = index;
             if (index == null) {
                 index = history.size() - 1;
             } else {
+                // 向上
                 if (up) {
                     index = index - 1;
                     if (index < 0) {
                         index = history.size() - 1;
                     }
-                } else {
+                }
+                // 向下
+                else {
                     index = index + 1;
                     if (index > history.size() - 1) {
                         index = 0;
                     }
                 }
             }
+            // 获得历史命令，并发送给客户端
             if (old == null || !old.equals(index)) {
+                // 设置当前位置
                 channel.setAttribute(HISTORY_INDEX_KEY, index);
+                // 获得历史命令
                 String value = history.get(index);
+                // 拼接退格，以清除客户端原有命令
                 if (old != null && old >= 0 && old < history.size()) {
                     String ov = history.get(old);
                     StringBuilder buf = new StringBuilder();
                     for (int i = 0; i < ov.length(); i++) {
+                        // 退格
                         buf.append("\b");
                     }
                     for (int i = 0; i < ov.length(); i++) {
                         buf.append(" ");
                     }
                     for (int i = 0; i < ov.length(); i++) {
+                        // 退格
                         buf.append("\b");
                     }
                     value = buf.toString() + value;
                 }
                 try {
+                    // 发送命令
                     channel.send(value);
                 } catch (RemotingException e) {
                     throw new IOException(StringUtils.toString(e));
                 }
             }
+            // 返回，需要更多指令
             return DecodeResult.NEED_MORE_INPUT;
         }
+        // 关闭指令
         for (Object command : EXIT) {
             if (isEquals(message, (byte[]) command)) {
                 if (logger.isInfoEnabled()) {
@@ -245,6 +283,7 @@ public class TelnetCodec extends TransportCodec {
                 return null;
             }
         }
+        // 查找是否回车结尾。若不是，说明一条 telnet 指令没结束。
         byte[] enter = null;
         for (Object command : ENTER) {
             if (endsWith(message, (byte[]) command)) {
@@ -255,9 +294,11 @@ public class TelnetCodec extends TransportCodec {
         if (enter == null) {
             return DecodeResult.NEED_MORE_INPUT;
         }
+        // 移除历史命令数组的位置
         LinkedList<String> history = (LinkedList<String>) channel.getAttribute(HISTORY_LIST_KEY);
         Integer index = (Integer) channel.getAttribute(HISTORY_INDEX_KEY);
         channel.removeAttribute(HISTORY_INDEX_KEY);
+        // 将历史命令拼接
         if (history != null && !history.isEmpty() && index != null && index >= 0 && index < history.size()) {
             String value = history.get(index);
             if (value != null) {
@@ -268,7 +309,9 @@ public class TelnetCodec extends TransportCodec {
                 message = b2;
             }
         }
+        // 将命令字节数组，转成具体的一条命令
         String result = toString(message, getCharset(channel));
+        // 添加到历史
         if (result.trim().length() > 0) {
             if (history == null) {
                 history = new LinkedList<String>();
@@ -277,8 +320,10 @@ public class TelnetCodec extends TransportCodec {
             if (history.isEmpty()) {
                 history.addLast(result);
             } else if (!result.equals(history.getLast())) {
+                // 添加当前命令到历史尾部
                 history.remove(result);
                 history.addLast(result);
+                // 超过上限，移除历史的头部
                 if (history.size() > 10) {
                     history.removeFirst();
                 }
