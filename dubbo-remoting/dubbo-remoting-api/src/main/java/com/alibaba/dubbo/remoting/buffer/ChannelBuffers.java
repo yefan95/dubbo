@@ -19,6 +19,9 @@ package com.alibaba.dubbo.remoting.buffer;
 
 import java.nio.ByteBuffer;
 
+/**
+ * Buffer 工具类，提供创建、比较 ChannelBuffer 等公用方法
+ */
 public final class ChannelBuffers {
 
     public static final ChannelBuffer EMPTY_BUFFER = new HeapChannelBuffer(0);
@@ -26,19 +29,43 @@ public final class ChannelBuffers {
     private ChannelBuffers() {
     }
 
+    /**
+     * DynamicChannelBuffer,实际是HeapChannelBuffer
+     *
+     * @return
+     */
     public static ChannelBuffer dynamicBuffer() {
         return dynamicBuffer(256);
     }
 
+    /**
+     * DynamicChannelBuffer,实际是HeapChannelBuffer
+     *
+     * @param capacity
+     * @return
+     */
     public static ChannelBuffer dynamicBuffer(int capacity) {
         return new DynamicChannelBuffer(capacity);
     }
 
+    /**
+     * DynamicChannelBuffer,实际是HeapChannelBuffer
+     *
+     * @param capacity
+     * @param factory
+     * @return
+     */
     public static ChannelBuffer dynamicBuffer(int capacity,
                                               ChannelBufferFactory factory) {
         return new DynamicChannelBuffer(capacity, factory);
     }
 
+    /**
+     * HeapChannelBuffer
+     *
+     * @param capacity
+     * @return
+     */
     public static ChannelBuffer buffer(int capacity) {
         if (capacity < 0) {
             throw new IllegalArgumentException("capacity can not be negative");
@@ -49,6 +76,14 @@ public final class ChannelBuffers {
         return new HeapChannelBuffer(capacity);
     }
 
+    /**
+     * HeapChannelBuffer
+     *
+     * @param array
+     * @param offset
+     * @param length
+     * @return
+     */
     public static ChannelBuffer wrappedBuffer(byte[] array, int offset, int length) {
         if (array == null) {
             throw new NullPointerException("array == null");
@@ -58,6 +93,12 @@ public final class ChannelBuffers {
         return wrappedBuffer(dest);
     }
 
+    /**
+     * HeapChannelBuffer
+     *
+     * @param array
+     * @return
+     */
     public static ChannelBuffer wrappedBuffer(byte[] array) {
         if (array == null) {
             throw new NullPointerException("array == null");
@@ -68,6 +109,12 @@ public final class ChannelBuffers {
         return new HeapChannelBuffer(array);
     }
 
+    /**
+     * HeapChannelBuffer || ByteBufferBackedChannelBuffer
+     *
+     * @param buffer
+     * @return
+     */
     public static ChannelBuffer wrappedBuffer(ByteBuffer buffer) {
         if (!buffer.hasRemaining()) {
             return EMPTY_BUFFER;
@@ -79,6 +126,12 @@ public final class ChannelBuffers {
         }
     }
 
+    /**
+     * ByteBufferBackedChannelBuffer
+     *
+     * @param capacity
+     * @return
+     */
     public static ChannelBuffer directBuffer(int capacity) {
         if (capacity == 0) {
             return EMPTY_BUFFER;
