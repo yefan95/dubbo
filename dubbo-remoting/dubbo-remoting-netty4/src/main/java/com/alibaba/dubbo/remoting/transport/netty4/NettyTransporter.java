@@ -25,6 +25,9 @@ import com.alibaba.dubbo.remoting.Transporter;
 
 public class NettyTransporter implements Transporter {
 
+    /**
+     * 拓展名
+     */
     public static final String NAME = "netty";
 
     @Override
@@ -35,6 +38,7 @@ public class NettyTransporter implements Transporter {
 
     @Override
     public Client connect(URL url, ChannelHandler listener) throws RemotingException {
+        // 创建 NettyClient 对象
         return new NettyClient(url, listener);
     }
 
