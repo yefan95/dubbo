@@ -41,6 +41,8 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * NettyClient.
+ *
+ * 继承 AbstractNettyClient 抽象类，Netty 客户端实现类
  */
 public class NettyClient extends AbstractClient {
 
@@ -61,21 +63,30 @@ public class NettyClient extends AbstractClient {
 
     @Override
     protected void doOpen() throws Throwable {
+        // 设置日志工厂
         NettyHelper.setNettyLoggerFactory();
+        // 实例化 ServerBootstrap
         bootstrap = new ClientBootstrap(channelFactory);
         // config
         // @see org.jboss.netty.channel.socket.SocketChannelConfig
+        // 设置可选项
         bootstrap.setOption("keepAlive", true);
         bootstrap.setOption("tcpNoDelay", true);
         bootstrap.setOption("connectTimeoutMillis", getConnectTimeout());
+        // 创建 NettyHandler 对象
         final NettyHandler nettyHandler = new NettyHandler(getUrl(), this);
+        // 设置责任链路
         bootstrap.setPipelineFactory(new ChannelPipelineFactory() {
             @Override
             public ChannelPipeline getPipeline() {
+                // 创建 NettyCodecAdapter 对象
                 NettyCodecAdapter adapter = new NettyCodecAdapter(getCodec(), getUrl(), NettyClient.this);
                 ChannelPipeline pipeline = Channels.pipeline();
+                // 解码
                 pipeline.addLast("decoder", adapter.getDecoder());
+                // 编码
                 pipeline.addLast("encoder", adapter.getEncoder());
+                // 处理器
                 pipeline.addLast("handler", nettyHandler);
                 return pipeline;
             }
@@ -85,14 +96,17 @@ public class NettyClient extends AbstractClient {
     @Override
     protected void doConnect() throws Throwable {
         long start = System.currentTimeMillis();
+        // 连接服务器
         ChannelFuture future = bootstrap.connect(getConnectAddress());
         try {
+            // 等待连接成功或者超时
             boolean ret = future.awaitUninterruptibly(getConnectTimeout(), TimeUnit.MILLISECONDS);
-
+            // 连接成功
             if (ret && future.isSuccess()) {
                 Channel newChannel = future.getChannel();
                 newChannel.setInterestOps(Channel.OP_READ_WRITE);
                 try {
+                    // 关闭老的连接
                     // Close old channel
                     Channel oldChannel = NettyClient.this.channel; // copy reference
                     if (oldChannel != null) {
@@ -106,6 +120,7 @@ public class NettyClient extends AbstractClient {
                         }
                     }
                 } finally {
+                    // 若 NettyClient 被关闭，关闭连接
                     if (NettyClient.this.isClosed()) {
                         try {
                             if (logger.isInfoEnabled()) {
@@ -116,20 +131,27 @@ public class NettyClient extends AbstractClient {
                             NettyClient.this.channel = null;
                             NettyChannel.removeChannelIfDisconnected(newChannel);
                         }
-                    } else {
+                    }
+                    // 设置新连接
+                    else {
                         NettyClient.this.channel = newChannel;
                     }
                 }
-            } else if (future.getCause() != null) {
+            }
+            // 发生异常，抛出 RemotingException 异常
+            else if (future.getCause() != null) {
                 throw new RemotingException(this, "client(url: " + getUrl() + ") failed to connect to server "
                         + getRemoteAddress() + ", error message is:" + future.getCause().getMessage(), future.getCause());
-            } else {
+            }
+            // 无结果（连接超时），抛出 RemotingException 异常
+            else {
                 throw new RemotingException(this, "client(url: " + getUrl() + ") failed to connect to server "
                         + getRemoteAddress() + " client-side timeout "
                         + getConnectTimeout() + "ms (elapsed: " + (System.currentTimeMillis() - start) + "ms) from netty client "
                         + NetUtils.getLocalHost() + " using dubbo version " + Version.getVersion());
             }
         } finally {
+            // 未连接，取消任务
             if (!isConnected()) {
                 future.cancel();
             }
