@@ -21,11 +21,16 @@ import com.alibaba.dubbo.common.URL;
 /**
  * Configurator. (SPI, Prototype, ThreadSafe)
  *
+ * 实现 Comparable 接口，配置规则接口
+ *
+ * 一个 Configurator 对象，对应一条配置规则
  */
 public interface Configurator extends Comparable<Configurator> {
 
     /**
      * get the configurator url.
+     *
+     * 配置规则
      *
      * @return configurator url.
      */
@@ -33,9 +38,10 @@ public interface Configurator extends Comparable<Configurator> {
 
     /**
      * Configure the provider url.
-     * O
      *
-     * @param url - old rovider url.
+     * 配置到 URL 中
+     *
+     * @param url - old provider url.
      * @return new provider url.
      */
     URL configure(URL url);
